@@ -1,3 +1,11 @@
+/**
+ * @file msg_lib.c
+ * @brief Library for communication between different processes
+ * @author Jianjiao Sun <jianjiaosun@163.com>
+ * @version 1.0
+ * @date 2015-06-23
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -6,128 +14,284 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-int send_msg(int sock, int type, int op, size_t len, void *send_msg)
-{
-	size_t send_len = sizeof(*net_data) + len;
-	char *send_buf; 
-	struct NET_DATA *net_data = (struct NET_DATA *) send_buf;
-	unsigned err;
+#include "msg_lib.h"
 
-	send_buf = (char *) malloc(send_len);
-	if (NULL == send_buf)
-	{
-		DEBUG_ERROR("Malloc faialed: errno = %d", errno);
-		return -1;
-	}
+#ifndef _ARPA_INET_H
+#include <arpa/inet.h>
+#endif
 
-	net_data = (struct NET_DATA *) send_buf;
-	net_data->type = (unsigned) type;
-	net_data->operation = (unsigned) op;
 
-	ret = send(g_sock, send_buf, sizeof(net_data) + len, 0); 
-	if (-1 == ret) 
-	{
-		DEBUG_ERROR("Send failed");
-	}
-	
-	free(send_buf);
+#define DEBUG_ERROR			printf
 
-	return ret;
-}
-
-int recv_msg(int sock, int type, const void *send_msg, size_t recv_len, void *recv_msg)
-{
-	int nr;
+/**
+ * @brief Safe recv when interrupted by signal
+ *
+ * @param sock 	Socket fd
+ * @param buf	Buffer for receiving message
+ * @param len	Buffer length
+ *
+ * @return  	0 	Success
+ *				!0 	failed
+ */
+int recv_safe(int sock, void *buf, size_t len)
+{  
+	size_t nr = -1;
 	int ret = -1;
 
-	nr = recv(g_sock, &err, sizeof(err), 0);
-	if ( nr > 0)
-	{
+    do {  
+		nr = recv(sock, buf, len, 0);
+    } while ((-1 == nr) && (errno == EINTR));
 
-	}
-	else if (nr < 0)
+	if (nr < 0)
 	{
 		DEBUG_ERROR("Receive error: %d", errno);
 	}
-	else 
+	else if (0 == nr)
 	{
 		DEBUG_ERROR("Sever closed the connection");
 	}
+	else
+	{
+		ret = 0;
+	}
 
 	return ret;
-}
-
-int send_recv_msg(int sock, int type, int op, size_t send_len, 
-				  const void *send_msg, size_t recv_len, void *recv_msg)
-{
-
-}
-
-static int _send_recv_ret(int sock, int type, int op, size_t len, void *send_msg)
-{
-	int t;
-
-
-	return 0;
-}
-
-static int create_local_socket(const char *sock_file)
-{
-	int sock;
-	int size;
-    struct sockaddr_un remote;
-	int len;
-
-	sock = socket(AF_UNIX, SOCK_STREAM, 0);
-	if (sock== -1) 
-	{
-		DEBUG_ERROR("Create socket failed, errno = %d", errno);
-		return -1;
-	}
-
-	remote.sun_family = AF_UNIX;
-
-	size = siezeof(remote.sun_path)
-	strncpy(remote.sun_path, sock_file, size);
-	if (size > 0)
-	{
-		remote.sun_path[size - 1] = '\0';
-	}
-
-	len = strlen(remote.sun_path) + sizeof(remote.sun_family);
-	if (connect(g_sock, (struct sockaddr *)&remote, len) == -1) {
-		DEBUG_ERROR("Connect failed, errno = %d", errno);
-
-		close(sock);
-		sock = -1;
-	}
-
-	return sock;
 }
 
 /**
- * @brief Send request to server and wait sever's reply 
- *	      The function used for send action to server, and only concern execute results
+ * @brief Safe send when interrupted by signal
  *
- * @param sock_file		Socket file for domain socket
- * @param type			Module ID
- * @param op			Operation ID
- * @param len			Message length for sending 
- * @param send_msg		Message for sending
+ * @param sock 	Socket fd
+ * @param buf	Buffer for  message
+ * @param len	Buffer length
  *
- * @return				0	Success
- *						!0 	Failed
+ * @return  	0 	Success
+ *				!0 	failed
  */
-int send_recv_ret_by_sockfile(const char *sock_file, int type, int op, size_t len, void *send_msg)
+int send_safe(int sock, void *buf, size_t len)
 {
-	int sock;
+	ssize_t nr;
 	int ret = -1;
 
-	sock = create_lock_socket(sock_file);
-	if (sock >= 0)
+	do {	
+		nr = send(sock, buf, len, 0); 
+    } while ((-1 == nr) && (errno == EINTR));
+
+	if (nr >= 0)
 	{
-		ret = send_recv_ret_by_sockfd(sock, type, op, len, send_msg);	
+		ret = 0;
+	}
+
+	return ret;
+}
+
+/**
+ * @brief send message
+ *
+ * @param sock   	Socket fd
+ * @param type		Command type ID
+ * @param op		Operation for the @type
+ * @param len		Length of sending message
+ * @param send_buf	Message to be sent	
+ * 					
+ * @caution	@send_buf should Should Convert byte order if send between different architecture 
+ *
+ * @return			0 	Success
+ 					!0  failed
+ */
+int send_msg(int sock, int type, int op, size_t send_len, const void *send_buf)
+{
+	char *buf; 
+	struct msg_request_head *request_head;
+	int len = sizeof(struct msg_request_head) + send_len;
+	int ret;
+
+	buf = (char *) malloc(len);
+	if (NULL == buf)
+	{
+		DEBUG_ERROR("Malloc faialed: errno = %d", errno);
+		return -ENOMEM;
+	}
+	request_head = (struct msg_request_head *) buf;
+
+	request_head->type = (unsigned) type;
+	request_head->operation = (unsigned) op;
+	msg_convert_request_head(request_head);
+
+	if ((0 != send_len) && (NULL != send_buf))
+	{
+		memcpy(request_head + 1, send_buf, send_len);
+	}
+
+	ret = send_safe(sock, buf, len); 
+	if (-1 == ret) 
+	{
+		DEBUG_ERROR("Send failed, errno = %d", errno);
 	}
 	
+	free(buf);
+
 	return ret;
+}
+
+/**
+ * @brief Receive message 
+ *
+ * @param sock 		Socket fd
+ * @param recv_len	Length fo received buffer
+ * @param recv_msg	Buffer for receivign message
+ *
+ * @caution	@recv_msg should convert byte order if transfer between different architecures
+ *
+ * @return	0	Success
+ *			!0	Fialed
+ */
+int recv_msg(int sock, size_t recv_len, void *recv_msg)
+{
+	int nr;
+	int ret = -1;
+	struct msg_reponse_head *recv_head;
+	size_t len;
+	char *buf;
+
+	len = sizeof(*recv_head) + recv_len;
+
+	buf = (char *) malloc(len);
+	if (NULL == buf)
+	{
+		DEBUG_ERROR("Malloc faialed: errno = %d", errno);
+		return -ENOMEM;
+	}
+
+	nr = recv_safe(sock, buf, len);
+	if ( nr > 0)
+	{
+		recv_head = (struct msg_reponse_head *)	buf;
+		msg_convert_response_head(recv_head);
+
+		ret = -recv_head->err_code;   /* Use positive between transfer*/
+		if (!ret && recv_msg)
+		{
+			if (recv_head->len <= recv_len)
+			{
+				memcpy(recv_msg, recv_head + 1, recv_head->len);
+			}
+			else
+			{
+				DEBUG_ERROR("The received buffer is not enough");
+				ret = -1;
+			}
+		}
+	}
+
+	free(buf);
+
+	return ret;
+}
+
+/**
+ * @brief Send and wait message retured 
+ *
+ * @param sock			Socket fd
+ * @param type			Command type ID
+ * @param op			Operation of @type
+ * @param send_len		Length of sending message
+ * @param send_buf		Message to be sent
+ * @param recv_len		Buffer ength of receiving message
+ * @param recv_msg		Buffer for receiving message
+ *
+ * @return 				0	Success
+ 						!0  Failed
+ */
+int send_msg_recv_msg(int sock, int type, int op, size_t send_len, 
+				  const void *send_buf, size_t recv_len, void *recv_buf)
+{
+	int ret;
+
+	ret = send_msg(sock, type, op, send_len, send_buf);
+	if (!ret)
+	{
+		ret = recv_msg(sock, recv_len, recv_buf);
+	}
+
+	return ret;
+}
+
+/**
+ * @brief Send and wait message retured 
+ *
+ * @param sock			Socket fd
+ * @param type			Command type ID
+ * @param op			Operation of @type
+ * @param recv_len		Buffer ength of receiving message
+ * @param recv_msg		Buffer for receiving message
+ *
+ * @return 				0	Success
+ 						!0  Failed
+ */
+int send_act_recv_msg(int sock, int type, int op, size_t recv_len, void *recv_buf)
+{
+ 	return send_msg_recv_msg(sock, type, op, 0, NULL, recv_len, recv_buf);
+}
+
+/**
+ * @brief Send and wait message retured 
+ *		  Same with function of "send_recv_msg", except no message returen , only results
+ *
+ * @param sock			Socket fd
+ * @param type			Command type ID
+ * @param op			Operation of @type
+ * @param send_len		Length of sending message
+ * @param send_buf		Message to be sent
+ *
+ * @return 				0	Success
+ 						!0  Failed
+ */
+int send_msg_recv_ret(int sock, int type, int op, size_t send_len, const void *send_buf)
+{
+	int ret;
+	unsigned err_num;
+
+	ret = send_msg(sock, type, op, send_len, send_buf);
+	if (!ret)
+	{
+		ret = recv_safe(sock, &err_num, sizeof(err_num));
+		if (!ret)
+		{
+			ret = -ntohl(err_num);
+		}
+	}
+
+	return ret;
+}
+
+/**
+ * @brief Send and wait message retured 
+ *		  Same with function of "send_recv_msg", except no message returen , only results
+ *
+ * @param sock			Socket fd
+ * @param type			Command type ID
+ * @param op			Operation of @type
+ *
+ * @return 				0	Success
+ 						!0  Failed
+ */
+int send_act_recv_ret(int sock, int type, int op)
+{
+	 return send_msg_recv_ret(sock, type, op, 0, NULL);
+}
+
+/**
+ * @brief Send error code 
+ *
+ * @param sock	Socket fd
+ * @param err_num	Error Code
+ *
+ * @return 
+ */
+int send_errno(int sock, int err_num)
+{
+	unsigned send_err = htonl(-err_num);
+
+	return send_safe(sock, &send_err, sizeof(send_err));
 }

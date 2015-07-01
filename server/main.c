@@ -154,7 +154,7 @@ static int dispatch_msg(int efd, struct epoll_event *ep_event)
 	   ready for reading (why were we notified then?) */
 	if ((event& EPOLLERR) || (event & EPOLLHUP) || (!(event & EPOLLIN)))
 	{
-		printf("error epoll event: %d, err = %d, hup = %d, in = %d\n", 
+		DEBUG_ERROR("error epoll event: %d, err = %d, hup = %d, in = %d\n", 
 			   event, EPOLLERR, EPOLLHUP, EPOLLIN);
 
 		epoll_ctl(efd, EPOLL_CTL_ADD, fd, NULL);
@@ -172,6 +172,8 @@ static int dispatch_msg(int efd, struct epoll_event *ep_event)
 	}
 
 	head = (struct msg_request_head *) buf;
+
+	DEBUG_INFO("Dispatch message: type = %d, operation = %d", head->type, head->operation);
 
 	switch (head->type)
 	{

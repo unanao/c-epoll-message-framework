@@ -150,7 +150,7 @@ int recv_msg(int sock, size_t recv_len, void *recv_msg)
 {
 	int nr;
 	int ret = -1;
-	struct msg_reponse_head *recv_head;
+	struct msg_response_head *recv_head;
 	size_t len;
 	char *buf;
 
@@ -163,10 +163,10 @@ int recv_msg(int sock, size_t recv_len, void *recv_msg)
 		return -ENOMEM;
 	}
 
-	nr = recv_safe(sock, buf, len);
-	if ( nr > 0)
+	ret = recv_safe(sock, buf, len);
+	if (!ret)
 	{
-		recv_head = (struct msg_reponse_head *)	buf;
+		recv_head = (struct msg_response_head*) buf;
 		msg_convert_response_head(recv_head);
 
 		ret = -recv_head->err_code;   /* Use positive between transfer*/
@@ -273,9 +273,55 @@ int send_msg_recv_ret(int sock, int type, int op, size_t send_len, const void *s
  *
  * @return 
  */
-int send_errno(int sock, int err_num)
+int response_errno(int sock, int err_num)
 {
 	unsigned send_err = htonl(-err_num);
 
 	return send_safe(sock, &send_err, sizeof(send_err));
+}
+
+
+/**
+ * @brief Response message
+ *
+ * @param sock Socket fd
+ * @param error_no	Error number
+ * @param msg_len	Length of message
+ * @param msg		Message to be sent
+ *
+ * @return 
+ */
+int response_msg(int sock, int error_no, size_t msg_len, const void *msg)
+{
+	struct msg_response_head *head;
+	int len = sizeof(*head) + msg_len;
+	int ret;
+	char *buf;
+
+	buf = (char *) malloc(len);
+	if (NULL == buf)
+	{
+		DEBUG_ERROR("Malloc faialed: errno = %d", errno);
+		return -ENOMEM;
+	}
+	head = (struct msg_response_head *) buf;
+
+	head->err_code = (unsigned) -error_no;
+	head->len = (unsigned) msg_len;
+	msg_convert_response_head(head);
+
+	if ((0 != msg_len) && (NULL != msg))
+	{
+		memcpy(head + 1, msg, msg_len);
+	}
+
+	ret = send_safe(sock, buf, len); 
+	if (-1 == ret) 
+	{
+		DEBUG_ERROR("Send failed, errno = %d", errno);
+	}
+	
+	free(buf);
+
+	return ret;
 }

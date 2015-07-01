@@ -91,7 +91,6 @@ static int proc_request(int op)
 {
 	int ret = -1;
 
-	printf("op = %d\n", op);
 	switch (op)	
 	{
 		case 1:

@@ -27,21 +27,21 @@ static inline void msg_convert_request_head(struct msg_request_head *request_hea
 #endif
 }
 
-struct msg_reponse_head
+struct msg_response_head
 {
 	unsigned err_code;	/* Error number*/
 	unsigned len;		/* Length of reponsed message*/ 
 };
 
-static inline void msg_convert_response_head(struct msg_reponse_head *response_head)
+static inline void msg_convert_response_head(struct msg_response_head *response_head)
 {
 #ifndef LOCAL_SOCKET_IPC
-	response_head->error_no = htonl(response_head->error_no);
+	response_head->error_code = htonl(response_head->error_code);
 	response_head->len = htonl(response_head->len);
 #endif
 }
 
-/* Process communication */
+/* Request communication API*/
 extern int send_msg(int sock, int type, int op, size_t len, const void *send_msg);
 extern int recv_msg(int sock, size_t recv_len, void *recv_msg);
 
@@ -50,7 +50,10 @@ extern int send_msg_recv_msg(int sock, int type, int op, size_t send_len,
 extern int send_msg_recv_ret(int sock, int type, int op, size_t len, const void *send_msg);
 extern int send_cmd_recv_msg(int sock, int type, int op, size_t len, void *recv_msg);
 
-extern int send_errno(int sock, int err_num);
+/*Response communication API*/
+extern int response_errno(int sock, int err_num);
+extern int response_msg(int sock, int error_no, size_t msg_len, const void *msg);
+
 
 /*Unix socket*/
 extern int create_local_socket(const char *sock_file);

@@ -1,30 +1,26 @@
 #ifndef _NETWORK_H_
 #define _NETWORK_H_
 
-#define			NET_DEV_NAME_LEN		32
-#define 		NET_SOCK_PATH			"/tmp/net_sock_file"
+#define							NET_DEV_NAME_LEN		32
+#define 						NET_SOCK_PATH			"/tmp/net_sock_file"
 
 /**
  * @brief Model
  */
 enum {
-	NET_WIRED,
+	NET_WIRED,		//Module 
 	NET_WIRELESS,
 	NET_MIRACAST,
+	NET_TEST,	//Example for Message test
 };
 
 /*
- * Sub-type of miracast 
+ * Sub-type of NET_MSG_TEST 
  */
 enum {
-	MIRACAST_APP_ENTER,
-};
-
-struct NET_DATA 
-{
-	unsigned type;
-	unsigned operation;
-	char dev_name[NET_DEV_NAME_LEN];
+	TEST_GET_NAME,			//Operation 1
+	TEST_SET_NAME,			//Operation 2
+	TEST_SET_GET_NAME,		//Operation 3
 };
 
 #endif

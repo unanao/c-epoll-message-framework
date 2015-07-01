@@ -229,7 +229,7 @@ int send_msg_recv_msg(int sock, int type, int op, size_t send_len,
  * @return 				0	Success
  						!0  Failed
  */
-int send_act_recv_msg(int sock, int type, int op, size_t recv_len, void *recv_buf)
+int send_cmd_recv_msg(int sock, int type, int op, size_t recv_len, void *recv_buf)
 {
  	return send_msg_recv_msg(sock, type, op, 0, NULL, recv_len, recv_buf);
 }
@@ -263,22 +263,6 @@ int send_msg_recv_ret(int sock, int type, int op, size_t send_len, const void *s
 	}
 
 	return ret;
-}
-
-/**
- * @brief Send and wait message retured 
- *		  Same with function of "send_recv_msg", except no message returen , only results
- *
- * @param sock			Socket fd
- * @param type			Command type ID
- * @param op			Operation of @type
- *
- * @return 				0	Success
- 						!0  Failed
- */
-int send_act_recv_ret(int sock, int type, int op)
-{
-	 return send_msg_recv_ret(sock, type, op, 0, NULL);
 }
 
 /**

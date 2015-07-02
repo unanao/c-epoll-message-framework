@@ -13,6 +13,8 @@
 #define NAME				"Hello World!"
 #define NAME2				"Hi wonnderfull world!"
 
+#define NEW_LIEN_ASCII		10	
+
 static int g_sock = -1;
 
 /**
@@ -127,10 +129,28 @@ int main(int argc, char *argv[])
 		printf("\nPlease input the selection\n"
 			   "1: Set name to server\n"
 			   "2: Get name from server\n"
-			   "3: Set and get name from server\n");
+			   "3: Set and get name from server\n"
+			   "q: Exit\n");
 
 		printf(">");
-		scanf("%d", &op);
+		fflush(stdin);
+		op = getchar();
+		if (NEW_LIEN_ASCII	== op)
+		{
+			op = getchar();
+		}
+
+		if ('q' == op)
+		{
+			break;
+		}
+
+		op = op - '0';
+		if ((op < 1) || (op > 3))
+		{
+			printf("\nInvalid input number\n");
+			continue;
+		}
 
 		if (0 != proc_request(op))
 		{

@@ -1,6 +1,6 @@
 1, Execute command of "make" in the root directory
 
-2, cd server; 
+2, cd server 
 
 3, Start server
 	./run_server.sh

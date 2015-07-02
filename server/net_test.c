@@ -36,7 +36,7 @@ static void set_get_name(int fd, void *msg)
 	get_name(fd);	
 }
 
-int net_test_process(int fd, int op, void *msg)
+void net_test_process(int fd, int op, void *msg)
 {
 	switch (op)
 	{
@@ -55,6 +55,4 @@ int net_test_process(int fd, int op, void *msg)
 
 
 	}
-
-	return 0;
 }

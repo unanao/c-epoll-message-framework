@@ -12,6 +12,7 @@ enum {
 	NET_WIRELESS,
 	NET_MIRACAST,
 	NET_TEST,	//Example for Message test
+	NET_TYPE_INVALID,
 };
 
 /*

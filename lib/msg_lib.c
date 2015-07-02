@@ -148,7 +148,6 @@ int send_msg(int sock, int type, int op, size_t send_len, const void *send_buf)
  */
 int recv_msg(int sock, size_t recv_len, void *recv_msg)
 {
-	int nr;
 	int ret = -1;
 	struct msg_response_head *recv_head;
 	size_t len;

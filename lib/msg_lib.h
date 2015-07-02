@@ -6,6 +6,8 @@
  */
 #define LOCAL_SOCKET_IPC
 
+typedef void (*msg_handler_fn_t)(int fd, int type, int op, void *msg);
+
 struct msg_request_head 
 {
 	unsigned type;			/* Module ID*/
@@ -41,7 +43,11 @@ static inline void msg_convert_response_head(struct msg_response_head *response_
 #endif
 }
 
-/* Request communication API*/
+
+extern int recv_safe(int sock, void *buf, size_t len);
+extern int send_safe(int sock, void *buf, size_t len);
+
+/* Request communication API, for client mostly*/
 extern int send_msg(int sock, int type, int op, size_t len, const void *send_msg);
 extern int recv_msg(int sock, size_t recv_len, void *recv_msg);
 
@@ -50,10 +56,12 @@ extern int send_msg_recv_msg(int sock, int type, int op, size_t send_len,
 extern int send_msg_recv_ret(int sock, int type, int op, size_t len, const void *send_msg);
 extern int send_cmd_recv_msg(int sock, int type, int op, size_t len, void *recv_msg);
 
-/*Response communication API*/
+/*Response communication API, for server mostly*/
 extern int response_errno(int sock, int err_num);
 extern int response_msg(int sock, int error_no, size_t msg_len, const void *msg);
-
+extern void msg_run(msg_handler_fn_t msg_handler);
+extern int msg_init(char *sock_path);
+extern void msg_finit(void);
 
 /*Unix socket*/
 extern int create_local_socket(const char *sock_file);

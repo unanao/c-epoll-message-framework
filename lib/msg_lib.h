@@ -46,6 +46,7 @@ static inline void msg_convert_response_head(struct msg_response_head *response_
 
 extern int recv_safe(int sock, void *buf, size_t len);
 extern int send_safe(int sock, void *buf, size_t len);
+extern int connect_safe(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 
 /* Request communication API, for client mostly*/
 extern int send_msg(int sock, int type, int op, size_t len, const void *send_msg);

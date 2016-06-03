@@ -49,7 +49,7 @@ int create_local_socket(const char *sock_file)
 	}
 
 	len = strlen(remote.sun_path) + sizeof(remote.sun_family);
-	if (connect(sock, (struct sockaddr *)&remote, len) == -1) {
+	if (connect_safe(sock, (struct sockaddr *)&remote, len) == -1) {
 		DEBUG_ERROR("Connect failed, errno = %d", errno);
 
 		close(sock);

@@ -13,6 +13,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <poll.h>
 
 #include "msg_lib.h"
 
@@ -83,6 +84,52 @@ int send_safe(int sock, void *buf, size_t len)
 	}
 
 	return ret;
+}
+
+static int check_conn_is_ok(int sock) 
+{
+    struct pollfd fd;
+    int ret = 0;
+    socklen_t len = 0;
+
+    fd.fd = sock;
+    fd.events = POLLOUT;
+
+    while (poll(&fd, 1, -1)) 
+    {
+        if( errno != EINTR ){
+            return -1;
+        }
+    }
+
+    len = sizeof(ret);
+    if (getsockopt(sock, SOL_SOCKET, SO_ERROR, &ret, &len)) 
+    {
+        perror("getsockopt");
+        return -1;
+    }
+
+    if(ret != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int connect_safe(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+{
+    int ret = 0;
+
+    ret = connect(sockfd, addr, addrlen);
+    if(ret) 
+    {
+        if(errno == EINTR) 
+        {
+            ret = check_conn_is_ok(sockfd); 
+        }
+    }
+
+    return ret;
 }
 
 /**

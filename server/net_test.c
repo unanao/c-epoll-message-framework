@@ -1,6 +1,7 @@
 #include <sys/types.h>
 #include <string.h>
 #include <stdio.h>
+#include <sys/socket.h>
 
 #include "msg_lib.h"
 #include "network.h"

@@ -31,13 +31,18 @@ Debug framework, can be used for any project singlely, which is easy to use and 
 
 #### in the sub-directory
 change into the target directory, then excute
+`
 make
+`
 
 ### start Server
+`
 cd script 
 ./run_server.sh
+`
 
 ### Start client
+`
 cd script 
 ./run_client.sh
-
+`

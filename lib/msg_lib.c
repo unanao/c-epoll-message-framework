@@ -16,13 +16,12 @@
 #include <poll.h>
 
 #include "msg_lib.h"
+#include "debug.h"
 
 #ifndef _ARPA_INET_H
 #include <arpa/inet.h>
 #endif
 
-
-#define DEBUG_ERROR			printf
 
 /**
  * @brief Safe recv when interrupted by signal
@@ -105,7 +104,7 @@ static int check_conn_is_ok(int sock)
     len = sizeof(ret);
     if (getsockopt(sock, SOL_SOCKET, SO_ERROR, &ret, &len)) 
     {
-        perror("getsockopt");
+        DEBUG_ERROR("getsockopt");
         return -1;
     }
 

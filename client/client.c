@@ -30,7 +30,7 @@ static int set_name(void)
 
 	if (0 == ret)
 	{
-		printf("Set name successfully\n");	
+		DEBUG_INFO("Set name successfully\n");	
 	}
 	else
 	{
@@ -54,7 +54,7 @@ static int get_name(void)
 	ret = send_cmd_recv_msg(g_sock, NET_TEST, TEST_GET_NAME, sizeof(buf), buf);
 	if (!ret)
 	{
-		printf("Name is :%s\n", buf);
+		DEBUG_INFO("Name is :%s\n", buf);
 	}
 	else
 	{
@@ -79,7 +79,7 @@ static int set_get_name(void)
 							NAME2, sizeof(buf), buf);
 	if (!ret)
 	{
-		printf("Name is :%s\n", buf);
+		DEBUG_INFO("Name is :%s\n", buf);
 	}
 	else
 	{
@@ -148,7 +148,7 @@ int main(int argc, char *argv[])
 		op = op - '0';
 		if ((op < 1) || (op > 3))
 		{
-			printf("\nInvalid input number\n");
+			DEBUG_ERROR("\nInvalid input number\n");
 			continue;
 		}
 

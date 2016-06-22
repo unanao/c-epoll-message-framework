@@ -19,7 +19,7 @@
 #include <sys/epoll.h>
 
 #include "msg_lib.h"
-#include "msg_debug.h"
+#include "debug.h"
 
 #define MAX_BUF_LEN		4096
 #define MAXEVENTS 		64
@@ -35,7 +35,7 @@ static int make_socket_non_blocking(int sfd)
 	flags = fcntl (sfd, F_GETFL, 0);
 	if (flags == -1)
 	{
-		perror ("fcntl");
+		DEBUG_ERROR ("fcntl");
 		return -1;
 	}
 
@@ -43,7 +43,7 @@ static int make_socket_non_blocking(int sfd)
 	s = fcntl (sfd, F_SETFL, flags);
 	if (s == -1)
 	{
-		perror ("fcntl");
+		DEBUG_ERROR ("fcntl");
 		return -1;
 	}
 
@@ -58,7 +58,7 @@ int create_socket(char *sock_path)
 	int len;
 
     if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-        perror("socket");
+        DEBUG_ERROR("socket");
 		return -1;
     }
 
@@ -124,7 +124,7 @@ int new_connect(int listen_fd, int efd)
 		}
 		else
 		{
-			perror("accept");
+			DEBUG_ERROR("accept");
 		}
 
 		return -1;

@@ -16,7 +16,7 @@
 #include <unistd.h>
 
 #include "msg_lib.h"
-#include "msg_debug.h"
+#include "debug.h"
 
 /**
  * @brief Create local socket and connect to server

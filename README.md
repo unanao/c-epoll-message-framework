@@ -39,13 +39,13 @@ make
 ### start Server
 
 `
-cd script 
+cd script   
 ./run_server.sh
 `
 
 ### Start client
 
 `
-cd script 
+cd script   
 ./run_client.sh
 `

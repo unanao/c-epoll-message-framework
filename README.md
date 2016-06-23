@@ -38,10 +38,9 @@ make
 
 ### start Server
 
-`
 	cd script   
 	./run_server.sh
-`
+
 
 ### Start client
 

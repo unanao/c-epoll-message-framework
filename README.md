@@ -40,6 +40,7 @@ make
 
 `
 	cd script   
+
 	./run_server.sh
 `
 
@@ -47,5 +48,6 @@ make
 
 `
 cd script   
+
 ./run_client.sh
 `

@@ -1,7 +1,7 @@
 /**
  * @file main.c
  * @brief main 
- * @author Jianjiao Sun <sunjianjiao@hisense.com>
+ * @author Jianjiao Sun <jianjiaosun@163.com>
  * @version 1
  * @date 2015-07-01
  */

@@ -1,6 +1,8 @@
 /**
  * @file array_queue.c
  * @brief Array implementtation of queues which support multi-thread
+ *        Compile with option -- " -lrt -lpthread"
+ *
  * @author Sun Jianjiao <jianjiaosun@163.com>
  * @version 1.0
  * @date 2016-07-01

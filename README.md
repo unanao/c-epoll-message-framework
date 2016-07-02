@@ -3,18 +3,22 @@
 The framework for communication between processes.
 
 ## code framework
-* lib  
-Use API from libmsg.so to send and receive message.
+### socket lib  
+Use API from libmsg.so to send and receive message.  
+Directory: lib
 
-* server 
-Daemon framework, add different action into function of "net_msg_process"
+### Array implementation of queue which support multi-threads
+Direcotry: array_queue
+The array queue support multi-threads
 
-* client
-client framework
-
-* debug_lib
+### debug_lib
 Debug framework, can be used for any project singlely, which is easy to use and  print line and function number
 
+### server 
+Daemon framework, add different action into function of "net_msg_process"
+
+### client
+client framework
 
 ## Run Example 
 

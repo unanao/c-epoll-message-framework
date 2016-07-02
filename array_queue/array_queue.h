@@ -1,8 +1,14 @@
 #ifndef _ARRAY_H_
 #define _ARRAY_H_
 
+struct job {
+	unsigned len;
+	void *arg;
+};
+
+
 struct array_queue {
-	struct queue_data *array;
+	struct job *array_job ;
 	unsigned cap;			//Max number for array queue
 	unsigned nr;			//data number of queue 
 	unsigned head;

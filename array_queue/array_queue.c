@@ -6,11 +6,20 @@
  * @date 2016-07-01
  */
 #include <stdlib.h>
+#include <pthread.h>
+#include <string.h>
+#include <stdio.h>
+
+#include "array_queue.h"
+
+#define DEBUG_ERROR 	printf
+#define DEBUG_INFO		printf
+#define DEBUG_DBG		
 
 
 static int is_queue_full(struct array_queue *queue)
 {
-	if (queue->nr == queue->max)
+	if (queue->nr == queue->cap)
 	{
 		return 1;	
 	}
@@ -20,7 +29,7 @@ static int is_queue_full(struct array_queue *queue)
 
 static int is_queue_empty(struct array_queue *queue)
 {
-	return (0 == queue->nr);
+	return (queue->nr <= 0);
 }
 
 static int next_queue_index(int idx, struct array_queue *queue)
@@ -46,7 +55,7 @@ static int next_queue_index(int idx, struct array_queue *queue)
 struct array_queue *array_queue_create(int cap)
 {
 	struct array_queue *queue;
-	struct void *array;
+	void *array;
 
 	queue = (struct array_queue *) malloc(sizeof(*queue));
 	if (!queue)
@@ -55,7 +64,7 @@ struct array_queue *array_queue_create(int cap)
 		return NULL;
 	}
 
-	array = (void *) malloc(sizeof(void *));
+	array = (void *) malloc(sizeof(struct job) * cap);
 	if (!array)
 	{
 		DEBUG_ERROR("Array create failed\n");
@@ -64,14 +73,14 @@ struct array_queue *array_queue_create(int cap)
 		return NULL;
 	}
 	
-	queue->array = array;
+	queue->array_job = array;
 	queue->cap = cap;
 	queue->nr = 0;
 	queue->head = 0;
 	queue->tail = 0;
-	queue->mutex = PTHREAD_MUTEX_INITIALIZER;
-	queue->read = PTHREAD_COND_INITIALIZER;
-	queue->write = PTHREAD_COND_INITIALIZER;
+	pthread_mutex_init(&queue->mutex, NULL);
+	pthread_cond_init(&queue->read, NULL);
+	pthread_cond_init(&queue->write, NULL);
 
 	return queue;
 }
@@ -96,34 +105,36 @@ int array_queue_enqueue(struct array_queue *queue, int len, void *data)
 	arg = malloc(len);
 	if (!arg)
 	{
-		DEBUG_ERROR("malloc failed");
+		DEBUG_ERROR("malloc failed\n");
 		return -1;
 	}
 	memcpy(arg, data, len);	
 
 	pthread_mutex_lock(&queue->mutex);
 
-	if (is_full(queue))
-	{
-		DEBUG_DBG("message queue if full, wait");
+	DEBUG_DBG("Producer: nr = %d, tail = %d\n", queue->nr, queue->tail);
 
-		pthread_cond_wait(&msg_queue->write, &msg_queue->mutex);
+	if (is_queue_full(queue))
+	{
+		DEBUG_DBG("Array queue if full, wait\n");
+
+		pthread_cond_wait(&queue->write, &queue->mutex);
 	}
 
-	is_empty = is_queue_empty(queue);
+	if (is_queue_empty(queue))
+	{
+		DEBUG_INFO("Array queue not empty, notify consumer\n");
+		pthread_cond_signal(&queue->read);
+	}
 
-	queue->queue[tail].arg = arg;
-	queue->queue[tail].len = len;
+	queue->array_job[queue->tail].arg = arg;
+	queue->array_job[queue->tail].len = len;
 
 	queue->nr++;
 	queue->tail = next_queue_index(queue->tail, queue);
+	DEBUG_DBG("Producer: equeueed, nr = %d, tail = %d\n", queue->nr, queue->tail);
 
-	pthread_mutex_unlock(&msg_queue->mutex);
-
-	if (is_empty())
-	{
-		pthread_cond_signal(&msg_queue->read)
-	}
+	pthread_mutex_unlock(&queue->mutex);
 
 	return 0;
 }
@@ -140,30 +151,35 @@ void *array_queue_dequeue(struct array_queue *queue)
 {
 	int is_full;
 	void *arg;
+	struct job *array;
 	
-	pthread_mutex_lock(&msg_queue->mutex);
+	pthread_mutex_lock(&queue->mutex);
 
-	if (is_emputy(queue))
+	DEBUG_DBG("Consumer: nr = %d, head = %d\n", queue->nr, queue->head);
+
+	if (is_queue_empty(queue))
 	{
-		DEBUG_DBG("message queue if emputy");
+		DEBUG_DBG("Consumer array queue is empty, wait \n");
 
 		pthread_cond_wait(&queue->read, &queue->mutex);
 	}
 
-	if_full = is_queue_full(queue);
-
-	arg = queue->array[queue->head];
-
-	array[queue->head] = NULL;
-	queue->nr--;
-	queue->head = next_queue_index(queue->head, queue);
-
-	pthread_mutex_unlock(&queue->mutex);
-
-	if (is_full)
+	if (is_queue_full(queue))
 	{
+		DEBUG_INFO("Consumer: array queue is not full, notify producer.\n");
 		pthread_cond_signal(&queue->write);	
 	}
+
+	array =queue->array_job; 
+	arg = array[queue->head].arg;
+
+	array[queue->head].arg = NULL;
+	array[queue->head].len = 0;
+	queue->nr--;
+	queue->head = next_queue_index(queue->head, queue);
+	DEBUG_DBG("Consumer: after dequeued,  nr = %d, head = %d\n", queue->nr, queue->head);
+
+	pthread_mutex_unlock(&queue->mutex);
 
 	return arg;
 }
@@ -178,7 +194,7 @@ void array_queue_destroy(struct array_queue *queue)
 {
 	int inc;
 	int max = queue->cap;
-	void *array = queue->array;
+	struct job *array = queue->array_job;
 
 	pthread_cond_destroy(&queue->read);
 	pthread_cond_destroy(&queue->write);
@@ -186,11 +202,99 @@ void array_queue_destroy(struct array_queue *queue)
 
 	for (inc = 0; inc < max; inc++)
 	{
-		if (arra[inc]) {
-			free(array[inc]);
+		if (array[inc].arg) {
+			free(array[inc].arg);
 		}
 	}
 
 	free(queue);
 	queue = NULL;
 }
+
+#define UT_TEST
+
+#ifdef UT_TEST
+
+#define READ_MAX	5
+#define QUEUE_SIZE	3
+static struct array_queue *queue;
+
+static pthread_t consumer_id[READ_MAX];
+static pthread_t producer_id[READ_MAX];
+
+static void *consumer_thread(void *arg) 
+{
+	int inc; 
+	unsigned *data;
+
+	DEBUG_INFO("consumer thread: %ld\n", pthread_self());
+
+	for (inc = 0; inc < READ_MAX; inc++)
+	{
+		data = array_queue_dequeue(queue);
+
+		DEBUG_INFO("consumer, inc %d: data %d\n", inc, *data);
+
+		free(data);
+	}
+}
+
+static void *producer_thread(void *arg) 
+{
+	int inc; 
+
+
+	for (inc = 0; inc < READ_MAX; inc++)
+	{
+		array_queue_enqueue(queue, sizeof(inc), &inc);
+
+		DEBUG_INFO("producer, inc %d: data %d\n", inc, inc);
+	}
+
+	DEBUG_INFO("producer thread: %ld\n", pthread_self());
+}
+
+static void test_consumer(int nr)
+{
+	int inc;
+	pthread_t id;
+
+	for (inc = 0; inc < nr; inc++)
+	{
+		pthread_create(&consumer_id[inc], NULL, consumer_thread, NULL);
+
+		DEBUG_DBG("Create consumer thread %d\n", inc);
+	}
+}
+
+static void test_producer(int nr)
+{
+	int inc;
+	pthread_t id;
+
+	for (inc = 0; inc < nr; inc++)
+	{
+		pthread_create(&producer_id[inc], NULL, producer_thread, NULL);
+		DEBUG_DBG("Create producer thread %d\n", inc);
+	}
+}
+
+static void test_producer_consumer()
+{
+	test_producer(1);	
+
+	test_consumer(1);
+
+	pthread_join(consumer_id[0], NULL);
+	pthread_join(producer_id[0], NULL);
+}
+
+int main()
+{
+	queue = array_queue_create(QUEUE_SIZE);	
+	test_producer_consumer();
+
+	DEBUG_DBG("exit\n");
+	array_queue_destroy(queue);	
+}
+#endif

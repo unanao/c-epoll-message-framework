@@ -22,5 +22,6 @@ extern struct array_queue *array_queue_create(int cap);
 extern int array_queue_enqueue(struct array_queue *queue, int len, void *data);
 extern void *array_queue_dequeue(struct array_queue *queue);
 extern void array_queue_destroy(struct array_queue *queue);
+extern void array_queue_wakeup_all_dequeue(struct array_queue *queue);
 
 #endif

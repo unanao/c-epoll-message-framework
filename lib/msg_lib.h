@@ -14,6 +14,11 @@ struct msg_request_head
 	unsigned operation;		/* Operation ID*/
 };
 
+struct msg_info {
+	int efd;
+	int listen_fd;
+};
+
 /**
  * @brief Byte order convert
  *		  hton and ntoh is same on same architecture
@@ -60,11 +65,14 @@ extern int send_cmd_recv_msg(int sock, int type, int op, size_t len, void *recv_
 /*Response communication API, for server mostly*/
 extern int response_errno(int sock, int err_num);
 extern int response_msg(int sock, int error_no, size_t msg_len, const void *msg);
-extern void msg_run(msg_handler_fn_t msg_handler);
-extern int msg_init(char *sock_path);
-extern void msg_finit(void);
+
+extern struct msg_info *msg_init(char *sock_path);
+extern void msg_run(struct msg_info *msg_info, msg_handler_fn_t msg_handler);
+extern void msg_finit(struct msg_info *msg_info);
 
 /*Unix socket*/
+#ifndef LOCAL_SOCKET_IPC
 extern int create_local_socket(const char *sock_file);
+#endif
 
 #endif

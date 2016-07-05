@@ -43,14 +43,15 @@ static void net_msg_process(int fd, int type, int op, void *msg)
 int main (int argc, char *argv[])
 {
 	int ret;
+	struct msg_info *msg_info;
 
-	ret = msg_init(NET_SOCK_PATH); 
-	if (0 == ret)
+	msg_info = msg_init(NET_SOCK_PATH); 
+	if (msg_info)
 	{
-		msg_run(net_msg_process);
+		msg_run(msg_info, net_msg_process);
 	}
 
-	msg_finit();
+	msg_finit(msg_info);
 
 	return ret;
 }

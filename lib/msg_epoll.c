@@ -32,15 +32,15 @@ static int make_socket_non_blocking(int sfd)
 {
 	int flags, s;
 
-	flags = fcntl (sfd, F_GETFL, 0);
+	flags = fcntl(sfd, F_GETFL, 0);
 	if (flags == -1)
 	{
-		DEBUG_ERROR ("fcntl");
+		DEBUG_ERROR("fcntl");
 		return -1;
 	}
 
 	flags |= O_NONBLOCK;
-	s = fcntl (sfd, F_SETFL, flags);
+	s = fcntl(sfd, F_SETFL, flags);
 	if (s == -1)
 	{
 		DEBUG_ERROR ("fcntl");
@@ -50,7 +50,7 @@ static int make_socket_non_blocking(int sfd)
 	return 0;
 }
 
-int create_socket(char *sock_path)
+static int create_socket(char *sock_path)
 {
     struct sockaddr_un local;
 	int fd = -1;
@@ -83,7 +83,7 @@ int create_socket(char *sock_path)
 	return fd;
 }
 
-int add2epoll(int efd, int flags, int fd)
+static int add2epoll(int efd, int flags, int fd)
 {
 	struct epoll_event event;
 	int ret;
@@ -107,7 +107,7 @@ int add2epoll(int efd, int flags, int fd)
  *
  * @return 
  */
-int new_connect(int listen_fd, int efd)
+static int new_connect(int listen_fd, int efd)
 {
 	int infd;
 	int ret = 0;
@@ -131,7 +131,8 @@ int new_connect(int listen_fd, int efd)
 	}
 
 	/* Make the incoming socket non-blocking and add it to the
-	   list of fds to monitor. */
+	 *  list of fds to be monitored. 
+	 */
 	ret = make_socket_non_blocking(infd);
 	if (ret == -1)
 	{
@@ -177,15 +178,67 @@ static int dispatch_msg(int efd, struct epoll_event *ep_event, msg_handler_fn_t 
 	return 0;
 }
 
-void msg_run(msg_handler_fn_t msg_handler)
+
+static int epoll_init(int listen_sock)
+{
+	int efd;
+
+	efd = epoll_create1(0);
+	if (efd > 0)
+	{
+		if (!add2epoll(efd, EPOLLIN, listen_sock))
+		{
+			return efd;
+		}
+		else 
+		{
+			close(efd);	
+		}
+	}
+
+	return -1;
+}
+
+
+static int socket_epoll_init(char *sock_path, struct msg_info *msg_info)
+{
+	int listen_sock;
+	int efd;
+	
+	listen_sock = create_socket(sock_path); 
+	if (listen_sock < 0) {
+		return -1;
+	}
+
+	efd = epoll_init(listen_sock);
+	if (efd < 0)
+	{
+		close(listen_sock);
+
+		return -1;
+	}
+
+	msg_info->efd = efd;
+	msg_info->listen_fd = listen_sock;
+
+	return 0;
+}
+
+/**
+ * @brief Wait for message received
+ *
+ * @param msg_handler 	Callback for message processing
+ * @param msg_info		Handler for epoll and listen socket
+ */
+void msg_run(struct msg_info *msg_info, msg_handler_fn_t msg_handler)
 {
 	struct epoll_event events[MAXEVENTS];
 	struct epoll_event *event;
 	int n, i;
 	int fd;
 	int ret = -1;
-	int efd = g_efd;
-	int listen_fd = g_listen_fd;
+	int efd = msg_info->efd;
+	int listen_fd = msg_info->listen_fd;
 
 	while (1)
 	{
@@ -223,45 +276,40 @@ void msg_run(msg_handler_fn_t msg_handler)
 	}
 }
 
-int msg_init(char *sock_path)
+/**
+ * @brief Message init
+ *
+ * @param sock_path	Domain Socket file path
+ *
+ * @return  0 	Success
+ *			-1	Failed
+ */
+struct msg_info *msg_init(char *sock_path)
 {
-	int listen_sock;
-	int efd;
-	int ret;
+	struct msg_info *msg_info;
 
-	listen_sock = create_socket(sock_path); 
-	if (-1 == listen_sock) {
-		return -1;
-	}
-
-	efd = epoll_create1(0);
-	if (efd == -1)
+	msg_info = (struct msg_info*) malloc(sizeof(*msg_info));
+	if (!msg_info) 
 	{
-		DEBUG_ERROR("epoll_create");
-		close(listen_sock);
-
-		return -1;
+		return NULL;
 	}
 
-	ret = add2epoll(efd, EPOLLIN, listen_sock);
-	if (0 == ret)
+	if (socket_epoll_init(sock_path, msg_info))
 	{
-		g_efd = efd;
-		g_listen_fd = listen_sock;
-	}
-	else
-	{
-		close(listen_sock);
-		close(efd); 
+		free(msg_info);
+		msg_info = NULL;
 	}
 
-
-	return ret;
+	return msg_info;
 }
 
-void msg_finit(void)
+/**
+ * @brief Message lib exit
+ */
+void msg_finit(struct msg_info *msg_info)
 {
-	close(g_listen_fd);
-	close(g_efd); 
-}
+	close(msg_info->listen_fd);
+	close(msg_info->efd); 
 
+	free(msg_info);
+}

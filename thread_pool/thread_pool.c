@@ -13,6 +13,7 @@
 
 #include "../array_queue/array_queue.h"
 #include "../debug_lib/debug.h"
+#include "thread_pool.h"
 
 enum THREAD_POOL_STATUS {
 	STATUS_TERMINATE,
@@ -22,10 +23,8 @@ enum THREAD_POOL_STATUS {
 static void *worker_thread_run(void *thread_arg)
 {
 	struct thread_pool *thread_pool = (struct thread_pool *) thread_arg;
-	struct array_queue *queue = thread_pool->queue;
 	struct thread_info *thread_info = thread_pool->threads;
 	void *arg;
-	int ret = -1;
 
 	for (;;)
 	{
@@ -71,6 +70,9 @@ static void *worker_thread_run(void *thread_arg)
 			continue;
 		}
 	}
+
+
+	return NULL;
 }
 
 static void _free_threads(struct thread_info *threads, struct array_queue *queue)
@@ -196,7 +198,7 @@ struct thread_pool *thread_pool_create(int worker_nr, int queue_size)
  */
 int thread_pool_add(struct thread_pool *thread_pool, int len, void *data)
 {
-	int ret;
+	int ret = -1;
 	struct thread_info *thread_info = thread_pool->threads;
 
 	pthread_rwlock_rdlock(&thread_info->status_lock);
@@ -219,13 +221,13 @@ void thread_pool_destroy(struct thread_pool *thread_pool)
 {
 	struct thread_info *threads = thread_pool->threads;
 
-	pthread_rwlock_rwlock(&threads->status_lock);
+	pthread_rwlock_wrlock(&threads->status_lock);
 	threads->status = STATUS_TERMINATE;		
 	pthread_rwlock_unlock(&threads->status_lock);
 
 	free_thread(thread_pool);
 
-	array_queue_destory(thread_pool->queue);
+	array_queue_destroy(thread_pool->queue);
 
 	free(thread_pool);
 	thread_pool = NULL;

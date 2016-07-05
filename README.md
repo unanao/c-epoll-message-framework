@@ -10,7 +10,8 @@ Directory: lib
 ### Array implementation of queue which support multi-threads
 Direcotry: array_queue
 The array queue support multi-threads
-Change into array_queue directory:  
+Change into array_queue directory: 
+
 | command      | Description                       |
 | ------------ | --------------------------------- |
 | make 	  	   | build library                     |

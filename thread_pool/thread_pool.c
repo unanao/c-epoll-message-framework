@@ -6,74 +6,24 @@
  * @date 2016-06-06
  */
 
-typedef int (*msg_dispatch_fn_t)(void *arg);
+#include <stdio.h>
+#include <pthread.h>
+#include <stdlib.h>
+#include <string.h>
 
-enum {
+#include "../array_queue/array_queue.h"
+#include "../debug_lib/debug.h"
+
+enum THREAD_POOL_STATUS {
 	STATUS_TERMINATE,
 	STATUS_RUN,
 };
 
-struct thread_info {
-	unsigned nr;
-	pthread_t *id;
-	unsigned status;
-	pthread_rwlock_t rwlock;
-};
-
-
-struct thread_pool {
-	struct thread_info *thread;
-	struct array_queue *queue;
-};
-
-static int create_thread(int nr, thread_info *thread_info)
+static void *worker_thread_run(void *thread_arg)
 {
-	int inc;
-	struct thread_t *thread_id;
-	int ret = 0;
-
-	thread_id = (struct pthread_t) malloc(nr * sizeof(pthread_t));
-	if (!thread)
-	{
-		return -1;
-	}
-
-	for (inc = 0; inc < nr; inc++)
-	{
-		ret = pthread_create(&thread_id[inc], NULL, worker_thread_run, &thread_id[inc]);
-		if (!ret)
-		{
-			ret = -1;	
-
-			break;
-		}
-
-		if (pthread_join(&thread_id[inc], NULL)) 
-		{
-			DEBUG_ERROR("");
-			ret = -1;
-			break;
-		}
-	}
-
-	if (!ret)
-	{
-		thread_info->nr = nr;
-		thread_info->status = STATUS_RUN;
-		thread_info->rwlock = PTHREAD_RWLOCK_INITIALIZER;
-	}
-	else 
-	{
-		free(thread_id);
-	}
-	
-	return ret;
-}
-
-static void *worker_thread_run(void *arg)
-{
-	struct msg_queue *msg_queue = thread_pool->queue;
-	struct thread_info *thread_info = thead_pool->thread;
+	struct thread_pool *thread_pool = (struct thread_pool *) thread_arg;
+	struct array_queue *queue = thread_pool->queue;
+	struct thread_info *thread_info = thread_pool->threads;
 	void *arg;
 	int ret = -1;
 
@@ -81,52 +31,115 @@ static void *worker_thread_run(void *arg)
 	{
 
 		/* 
-		 * TODO: how to avoid thread between status check and broadcast 
-		 * exit when thread is working and miss the waked up testing 
+		 * exit for status is set to "TERMINATE" when worker thread is run
+		 * 
 		 */
-		pthread_rwlock_rdlock(&thread_info->rwlock);
+		pthread_rwlock_rdlock(&thread_info->status_lock);
 		if (STATUS_TERMINATE == thread_info->status)
 		{
+
+			pthread_rwlock_unlock(&thread_info->status_lock);
+
 			DEBUG_DBG("Thread %d terminated", pthread_self());
 			break;
 		}
 
-		pthread_rwlock_unlock(&thread_info->rwlock);
 
 		arg = array_queue_dequeue(thread_pool->queue); 
-		if (!arg) {
-			DEBUG_ERROR("No data");
-			continue;
-		}
 
-		/* exit when receive thread is waked up */
-		pthread_rwlock_rdlock(&thread_info->rwlock);
+		/* exit when thread is waiting when status is set to "TERMINATE" */
 		if (STATUS_TERMINATE == thread_info->status)
 		{
+			pthread_rwlock_unlock(&thread_info->status_lock);
+
 			DEBUG_DBG("Thread %d terminated", pthread_self());
 			break;
 		}
-		pthread_rwlock_unlock(&thread_info->rwlock);
 
-		if (msg_queue->msg_dispatch(arg))
+		pthread_rwlock_unlock(&thread_info->status_lock);
+
+		if (arg) 
 		{
-			DEBUG_ERROR("run failed");
+			if (thread_pool->msg_dispatch(arg))
+			{
+				DEBUG_ERROR("run failed");
+			}
+		}
+		else
+		{
+			DEBUG_ERROR("No data");
+			continue;
 		}
 	}
 }
 
-
-static int free_thread(struct thread_info *thread_info)
+static void _free_threads(struct thread_info *threads, struct array_queue *queue)
 {
-	pthread_rwlock_rwlock(&thread_info->rwlock);
-	thread_info->status = STATUS_TERMINATE;		
-	pthread_rwlock_unlock();
+	int inc;
+	pthread_t *thread_id = threads->id;
 
-	pthread_cond_braodcast(&msg_queue->read);
+	array_queue_wakeup_all_dequeue(queue);
 
-	pthread_mutex_destroy(&thread_info->mutex);
+	pthread_rwlock_destroy(&threads->status_lock);
 
-	free(thread_info->id);
+	for (inc = 0; inc < threads->nr; inc++)
+	{
+		if (pthread_join(thread_id[inc], NULL)) 
+		{
+			DEBUG_ERROR("pthread join failed\n");
+		}
+	}
+
+	free(thread_id);
+}
+
+static struct thread_info *create_threads(int nr, struct array_queue *queue)
+{
+	int inc;
+	pthread_t *thread_id;
+	size_t id_len = nr * sizeof(pthread_t);
+	int ret = 0;
+	struct thread_info *threads;
+
+	threads = (struct thread_info *) malloc(sizeof(*threads));
+	if (!threads)
+	{
+		return NULL;
+	}
+
+	thread_id = (pthread_t *) malloc(id_len);
+	if (!thread_id)
+	{
+		free(threads);
+		return NULL;
+	}
+
+	memset(thread_id, 0, id_len);
+
+	threads->status = STATUS_RUN;
+	pthread_rwlock_init(&threads->status_lock, NULL);
+
+	for (inc = 0; inc < nr; inc++)
+	{
+		ret = pthread_create(&thread_id[inc], NULL, worker_thread_run, threads);
+		if (!ret)
+		{
+			_free_threads(threads, queue);
+			return NULL;
+		}
+
+		threads->nr = inc;
+	}
+
+	
+	return threads;
+}
+
+
+
+static void free_thread(struct thread_pool *thread_pool)
+{
+	_free_threads(thread_pool->threads, thread_pool->queue);
 }
 
 /**
@@ -138,37 +151,36 @@ static int free_thread(struct thread_info *thread_info)
  * @return 	!NULL	Success
  *			NULL	Failed
  */
-struct *thread_pool thread_pool_create(int worker_nr, int queue_size)
+struct thread_pool *thread_pool_create(int worker_nr, int queue_size)
 {
     struct thread_pool *thread_pool;
-	sturct array_queue *queue;
+	struct array_queue *queue;
+	struct thread_info *threads;
 
-    thread_pool = (struct thread_pool *) malloc(sizeof(*pool));
-    if (!pool)
+    thread_pool = (struct thread_pool *) malloc(sizeof(*thread_pool));
+    if (!thread_pool)
     {
         return NULL;
     }
 	memset(thread_pool, 0, sizeof(*thread_pool));
 
-	if (create_thread(nr, &thread_pool->thread))
-	{
-		free(pool);
-
-		return NULL;
-	}
-
-
 	queue = array_queue_create(queue_size);
 	if (!queue)
 	{
-		free(pool);
-		free(thread_pool->thread.id)
+		free(thread_pool);
+
+		return NULL;
+	}
+	thread_pool->queue = queue;
+
+	threads = create_threads(worker_nr, queue);
+	if (!threads)
+	{
+		free(thread_pool);
 
 		return NULL;
 	}
 
-	thread_pool->queue = queue;
-	
 	return thread_pool;
 }
 
@@ -184,7 +196,18 @@ struct *thread_pool thread_pool_create(int worker_nr, int queue_size)
  */
 int thread_pool_add(struct thread_pool *thread_pool, int len, void *data)
 {
-	return array_queue_enqueue(thread_pool->queue, len, data);
+	int ret;
+	struct thread_info *thread_info = thread_pool->threads;
+
+	pthread_rwlock_rdlock(&thread_info->status_lock);
+
+	if (STATUS_RUN == thread_pool->threads->status) {
+		ret = array_queue_enqueue(thread_pool->queue, len, data);
+	}
+
+	pthread_rwlock_unlock(&thread_info->status_lock);
+
+	return ret;
 }
 
 /**
@@ -194,9 +217,16 @@ int thread_pool_add(struct thread_pool *thread_pool, int len, void *data)
  */
 void thread_pool_destroy(struct thread_pool *thread_pool)
 {
-	array_queue_destory(thread_pool->array_queue);
-	free_thread();
-	free(thread_pool);
+	struct thread_info *threads = thread_pool->threads;
 
+	pthread_rwlock_rwlock(&threads->status_lock);
+	threads->status = STATUS_TERMINATE;		
+	pthread_rwlock_unlock(&threads->status_lock);
+
+	free_thread(thread_pool);
+
+	array_queue_destory(thread_pool->queue);
+
+	free(thread_pool);
 	thread_pool = NULL;
 }
